@@ -2,7 +2,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { CardData, HandType, GamePhase } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always use named parameter for apiKey and get it directly from process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getDealerCommentary = async (
   playerHand: CardData[],
@@ -12,7 +13,7 @@ export const getDealerCommentary = async (
   dealerScore: number,
   result?: string
 ): Promise<string> => {
-  const model = 'gemini-3-flash-preview';
+  const modelName = 'gemini-3-flash-preview';
   
   const playerHandStr = playerHand.map(c => `${c.rank}${c.suit}`).join(', ');
   const dealerHandStr = dealerHand.map(c => c.isFaceUp ? `${c.rank}${c.suit}` : '??').join(', ');
@@ -32,15 +33,17 @@ export const getDealerCommentary = async (
   Don't repeat yourself. Use casino slang like "Quắc rồi", "Dằn chưa?", "Ăn non thế".`;
 
   try {
+    // Correct usage: call generateContent directly on ai.models
     const response = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: prompt,
       config: {
         temperature: 0.8,
         topP: 0.9,
       }
     });
-    return response.text.trim() || "Chúc may mắn!";
+    // Extract text using the .text property (not a method)
+    return response.text?.trim() || "Chúc may mắn!";
   } catch (error) {
     console.error("Gemini Error:", error);
     return "Lên bài nào!";
