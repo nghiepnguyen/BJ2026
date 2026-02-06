@@ -30,12 +30,22 @@ const App: React.FC = () => {
   const [targetRoom, setTargetRoom] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const myId = useRef<string>('');
 
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // Check for room code in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room');
+    if (room && room.length === 6 && /^\d+$/.test(room)) {
+      setTargetRoom(room);
+    }
+  }, []);
 
   const broadcastState = (newState: GameState) => {
     network.broadcast({ 
@@ -87,7 +97,6 @@ const App: React.FC = () => {
     network.onPlayerJoined = (id, name) => {
       if (stateRef.current.isHost) {
         setState(prev => {
-          // Prevent duplicate players
           if (prev.players.find(p => p.id === id)) return prev;
 
           const newPlayer: Player = {
@@ -101,7 +110,6 @@ const App: React.FC = () => {
           };
           const newState = { ...prev, players: [...prev.players, newPlayer] };
           
-          // CRITICAL: Immediate direct message to the new player with current state
           network.sendTo(id, { 
               type: MessageType.STATE_UPDATE, 
               payload: newState, 
@@ -109,7 +117,6 @@ const App: React.FC = () => {
               senderName: userName 
           });
 
-          // Then broadcast to all others
           broadcastState(newState);
           return newState;
         });
@@ -118,11 +125,10 @@ const App: React.FC = () => {
 
     network.onMessageReceived = (msg: PeerMessage) => {
       if (msg.type === MessageType.STATE_UPDATE) {
-        // Clients update their local state from Host
         setState(prev => ({ 
           ...msg.payload, 
           isHost: prev.isHost,
-          roomCode: prev.roomCode // Keep the display code
+          roomCode: prev.roomCode
         }));
       }
       
@@ -161,7 +167,6 @@ const App: React.FC = () => {
       network.connectTo(targetRoom, userName);
       setState(prev => ({ ...prev, roomCode: targetRoom, isHost: false }));
       
-      // Safety timeout if joining fails
       setTimeout(() => {
           setIsConnecting(false);
       }, 5000);
@@ -169,6 +174,19 @@ const App: React.FC = () => {
       alert("Không kết nối được!");
       setIsConnecting(false);
     }
+  };
+
+  const getInviteLink = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', state.roomCode);
+    return url.toString();
+  };
+
+  const copyInviteLink = () => {
+    const link = getInviteLink();
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const startRound = () => {
@@ -342,17 +360,25 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-between p-4 bg-[#064e3b] text-white">
-      <div className="w-full max-w-6xl flex justify-between items-center mb-4">
+      <div className="w-full max-w-6xl flex flex-wrap justify-between items-center gap-4 mb-4">
         <div className="flex flex-col">
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-bold opacity-50 uppercase">Mã Sòng: </h1>
-            <span 
-              onClick={() => { navigator.clipboard.writeText(state.roomCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-              className="bg-yellow-500 text-black px-4 py-1.5 rounded-xl cursor-pointer hover:bg-yellow-400 transition-all font-black text-xl shadow-lg flex items-center gap-2"
-            >
-              {state.roomCode}
-              <span className="text-xs">{copied ? '✅' : '📋'}</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <span 
+                onClick={() => { navigator.clipboard.writeText(state.roomCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                className="bg-yellow-500 text-black px-4 py-1.5 rounded-xl cursor-pointer hover:bg-yellow-400 transition-all font-black text-xl shadow-lg flex items-center gap-2"
+              >
+                {state.roomCode}
+                <span className="text-xs">{copied ? '✅' : '📋'}</span>
+              </span>
+              <button 
+                onClick={copyInviteLink}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg active:scale-95"
+              >
+                {copiedLink ? 'ĐÃ CHÉP LINK ✅' : 'MỜI BẠN 🔗'}
+              </button>
+            </div>
           </div>
           <p className="text-[10px] font-bold opacity-30 uppercase mt-1">Sòng có {state.players.length + 1} người</p>
         </div>
